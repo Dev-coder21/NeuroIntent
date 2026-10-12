@@ -16,6 +16,10 @@ const SCENE = {
     start: { shift: 0, dim: 0.75 },
 }
 
+// Chapter iv: the ground rules as one paragraph whose words light up as you scroll through it.
+const RULES = 'This is a research pilot. It does not detect or diagnose autism, and it never suggests you should speak differently. Your answers are sent to the analysis server, processed, and deleted. Nothing is stored.'
+const RULE_WORDS = RULES.split(' ')
+
 function Switch({ id, checked, onChange, children }) {
     return (
         <button type="button" role="switch" aria-checked={checked} className="switch" id={id} onClick={() => onChange(!checked)}>
@@ -43,8 +47,9 @@ export default function Home({ stageRef, onBegin }) {
             const y = scrollY, vh = innerHeight
             const top = (id) => byId(id).getBoundingClientRect().top + y
             const t3 = top('s-three'), h3 = byId('s-three').offsetHeight
+            const t4 = top('s-four'), h4 = byId('s-four').offsetHeight
             layout = {
-                vh, t3, h3,
+                vh, t3, h3, t4, h4,
                 anchors: [[0, 0], [top('s-one') - vh * 0.35, 1], [top('s-two') - vh * 0.35, 2], [t3, 2], [t3 + h3 - vh, 3], [top('s-four') - vh * 0.2, 3], [top('s-start') - vh * 0.45, 4]],
                 sections: [...story.querySelectorAll('[data-scene]')].map(el => [el.dataset.scene, top(el.id), top(el.id) + el.offsetHeight]),
             }
@@ -55,6 +60,7 @@ export default function Home({ stageRef, onBegin }) {
         const ro = new ResizeObserver(invalidate)
         ro.observe(story)
 
+        const lit = { el: byId('s-four'), p: null, last: -1 }
         const ui3 = { num: byId('biasNum'), bar: byId('biasBar'), steady: byId('steady'), tag: byId('stateTag'), last: -1, lastTag: '' }
         const storyTarget = () => {
             if (!layout) measure()
@@ -82,25 +88,21 @@ export default function Home({ stageRef, onBegin }) {
                 ui3.bar.style.transform = `scaleX(${d})`
                 ui3.steady.style.opacity = clamp(s3 * 3 - 0.3).toFixed(2)
             }
+            // chapter iv: 0 when the paragraph pins to the top, 1 when its section has scrolled through
+            const p4 = clamp((y - layout.t4) / Math.max(1, layout.h4 - vh))
+            lit.p = lit.p === null || stage.reduce ? p4 : lit.p + (p4 - lit.p) * 0.12
+            if (Math.abs(p4 - lit.p) < 0.0004) lit.p = p4
+            if (lit.p !== lit.last) { lit.last = lit.p; lit.el.style.setProperty('--p', lit.p.toFixed(4)) }
             const tag = s3 < 0.5 ? 'Lively pitch, steady pace' : 'Flat pitch, longer pauses'
             if (tag !== ui3.lastTag) { ui3.lastTag = tag; ui3.tag.textContent = tag }
             return m
         }
         stage.setStoryTarget(storyTarget)
 
-        // ground rules light up as they scroll in
-        let io = null
-        const rules = story.querySelectorAll('.rule')
-        if ('IntersectionObserver' in window) {
-            io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('in') }), { threshold: 0.4 })
-            rules.forEach(r => io.observe(r))
-        } else rules.forEach(r => r.classList.add('in'))
-
         return () => {
             stage.setStoryTarget(null)
             window.removeEventListener('resize', invalidate)
             ro.disconnect()
-            if (io) io.disconnect()
         }
     }, [stageRef])
 
@@ -171,13 +173,14 @@ export default function Home({ stageRef, onBegin }) {
                 </div>
             </section>
 
-            <section className="rules" id="s-four" data-scene="four">
-                <span className="stage-num">iv.</span>
-                <h2>Ground rules</h2>
-                <div className="rules-list">
-                    <p className="rule"><strong>No diagnosis</strong><span>It does not detect or diagnose autism or any other condition.</span></p>
-                    <p className="rule"><strong>No coaching to sound different</strong><span>It interprets you as you speak. It never suggests you should change how you talk.</span></p>
-                    <p className="rule"><strong>Nothing stored</strong><span>Answers are sent to the analysis server, processed, and deleted straight after.</span></p>
+            <section className="lit" id="s-four" data-scene="four" style={{ '--n': RULE_WORDS.length }}>
+                <div className="lit-stage">
+                    <span className="stage-num">iv.</span>
+                    <p className="lit-text" aria-label={RULES}>
+                        {RULE_WORDS.map((w, i) => (
+                            <span key={i} aria-hidden="true"><span className="lit-w" style={{ '--i': i }}>{w}</span>{i < RULE_WORDS.length - 1 ? ' ' : ''}</span>
+                        ))}
+                    </p>
                 </div>
             </section>
 
