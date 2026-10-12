@@ -154,7 +154,7 @@ html.intro-on .reveal > span, html.intro-on .fade { animation-play-state: paused
 .in-top { top: 0; display: flex; align-items: flex-end; justify-content: center; }
 .in-bot { bottom: 0; }
 .in-mark { font-family: var(--display); font-weight: 500; font-size: clamp(3rem, 12vw, 12rem); line-height: .8; letter-spacing: .01em; padding: 0 var(--gut) clamp(2.4rem, 6vh, 4rem); white-space: nowrap; }
-.in-mark span span { display: inline-block; text-align: center; overflow: hidden; vertical-align: bottom; transition: color .25s; }
+.in-mark span span { display: inline-block; text-align: center; overflow: visible; vertical-align: bottom; transition: color .25s; }
 .in-mark .scr { color: #9CC3BC; opacity: .9; }
 .in-under { display: grid; justify-items: center; gap: 1.1rem; text-align: center; padding: clamp(2.6rem, 7vh, 4.2rem) var(--gut) 0; }
 .in-tag { font-family: var(--serif); font-style: italic; font-weight: 300; font-size: clamp(1.4rem, 3vw, 2.4rem); color: var(--in-cream); opacity: 0; }
