@@ -1,6 +1,7 @@
 // The single client for the backend. Nothing else in the app talks to the network.
 // It sends audio and mode as multipart form fields (no consent field, no label) and turns every failure
 // into a typed error with a plain-language message. It never fills in values the server did not return.
+import { isDemo, demoAnalyze } from './demo'
 
 export const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/+$/, '')
 
@@ -89,6 +90,9 @@ export function timeoutError(timeoutMs) {
 // Send one recording to POST /analyze and return the parsed JSON. Throws an ApiError on any failure.
 // If the caller's `signal` aborts (for example the user withdrew consent), the browser's AbortError is rethrown.
 export async function analyzeRecording(recording, index, { signal, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
+    // Demo mode (?demo in the URL): sample data, clearly badged on screen, no network call.
+    if (isDemo()) return demoAnalyze(recording, index, signal)
+
     const form = new FormData()
     form.append('audio', recording.audioBlob, `answer_${index + 1}.webm`)
     form.append('mode', recording.mode)

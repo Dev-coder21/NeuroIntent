@@ -1,283 +1,230 @@
-// Import hooks for state and side effects
+// Records one answer per question with MediaRecorder: keep or redo each take, the mic is released on
+// stop, withdraw and unmount. Live microphone levels drive the particle ring (the stage's uLevel).
 import { useState, useRef, useEffect } from 'react'
+import { clamp } from './stage'
+import { warp, isWarping } from './warp'
+import { fxMagnetOnly } from './fx'
+import { Btn } from './Buttons'
+import { isDemo } from './demo'
+import { QUESTIONS, ROMAN } from './questions'
 
-// The 5 interview questions shown one at a time
-const QUESTIONS = [
-    "Tell me about yourself and your background.",
-    "Describe a challenging problem you solved and how you approached it.",
-    "What are your greatest strengths and how do they help you at work?",
-    "Tell me about a time you worked in a team under pressure.",
-    "Where do you see yourself in 5 years and what are your goals?"
-]
+const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
-function RecordingScreen({ consentData, onComplete, onWithdraw }) {
-    // Tracks which question we are on (0 to 4)
+function QuestionText({ text }) {
+    const words = text.split(' ')
+    return words.map((w, i) => (
+        <span key={i}><span className="w"><span style={{ '--i': i }}>{w}</span></span>{i < words.length - 1 ? ' ' : ''}</span>
+    ))
+}
+
+function RecordingScreen({ consentData, stageRef, setStatus, onComplete }) {
     const [questionIndex, setQuestionIndex] = useState(0)
-
-    // Tracks recording state — 'idle', 'recording', 'done'
-    const [recordingState, setRecordingState] = useState('idle')
-
-    // Stores all accepted recordings
-    const [recordings, setRecordings] = useState([])
-
-    // Why the microphone could not be used, if it could not
+    const [recordingState, setRecordingState] = useState('idle') // 'idle' | 'recording' | 'done'
     const [micError, setMicError] = useState(null)
+    const [seconds, setSeconds] = useState(0)
 
-    // Stores waveform bar heights for visualization
-    const [waveformBars, setWaveformBars] = useState(Array(40).fill(4))
-
-    // Holds MediaRecorder instance
+    const recordingsRef = useRef([])
     const mediaRecorderRef = useRef(null)
-
-    // Holds recorded audio chunks
     const audioChunksRef = useRef([])
-
-    // Holds audio analyser for waveform
-    const analyserRef = useRef(null)
-
-    // Holds animation frame for waveform
-    const animationRef = useRef(null)
-
-    // Holds audio context
     const audioContextRef = useRef(null)
+    const levelRafRef = useRef(0)
+    const simRef = useRef(0)
+    const timerRef = useRef(null)
 
-    // Releases the microphone and the waveform loop. Safe to call more than once.
+    const setLevel = (v) => { if (stageRef.current) stageRef.current.scene.levelTarget = v }
+
     const releaseMicrophone = () => {
-        cancelAnimationFrame(animationRef.current)
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close()
-        }
+        cancelAnimationFrame(levelRafRef.current)
+        cancelAnimationFrame(simRef.current)
+        simRef.current = 0
+        clearInterval(timerRef.current)
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close()
         audioContextRef.current = null
-        analyserRef.current = null
         const recorder = mediaRecorderRef.current
         if (recorder) {
             if (recorder.state !== 'inactive') recorder.stop()
             recorder.stream.getTracks().forEach(t => t.stop())
         }
+        mediaRecorderRef.current = null
     }
 
-    // Leaving this screen (including withdrawing consent) must switch the microphone off
+    // Leaving this screen (including withdrawing consent) switches the microphone off.
     useEffect(() => {
+        const stage = stageRef.current
         return () => {
-            cancelAnimationFrame(animationRef.current)
-            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                audioContextRef.current.close()
-            }
+            cancelAnimationFrame(levelRafRef.current)
+            cancelAnimationFrame(simRef.current)
+            clearInterval(timerRef.current)
+            if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close()
             const recorder = mediaRecorderRef.current
             if (recorder) {
                 if (recorder.state !== 'inactive') recorder.stop()
                 recorder.stream.getTracks().forEach(t => t.stop())
             }
+            if (stage) stage.scene.levelTarget = 0
         }
-    }, [])
+    }, [stageRef])
 
-    // Starts recording from microphone
+    useEffect(() => {
+        setStatus(`Question ${questionIndex + 1} of ${QUESTIONS.length}`)
+    }, [questionIndex, setStatus])
+
+    const beginTake = () => {
+        setSeconds(0)
+        clearInterval(timerRef.current)
+        timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
+        setRecordingState('recording')
+    }
+
     const startRecording = async () => {
         setMicError(null)
         try {
-            // Request microphone access from browser
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw Object.assign(new Error('this browser does not offer microphone access on this page'), { name: 'NotSupportedError' })
+            }
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-            // Set up audio context for waveform visualization
-            audioContextRef.current = new AudioContext()
-            const source = audioContextRef.current.createMediaStreamSource(stream)
-            analyserRef.current = audioContextRef.current.createAnalyser()
-            analyserRef.current.fftSize = 128
-            source.connect(analyserRef.current)
-
-            // Start animating waveform bars
-            animateWaveform()
-
-            // Set up MediaRecorder to capture audio
             mediaRecorderRef.current = new MediaRecorder(stream)
             audioChunksRef.current = []
+            mediaRecorderRef.current.ondataavailable = (e) => { audioChunksRef.current.push(e.data) }
 
-            // Collect audio data as it comes in
-            mediaRecorderRef.current.ondataavailable = (e) => {
-                audioChunksRef.current.push(e.data)
+            const ctx = new (window.AudioContext || window.webkitAudioContext)()
+            audioContextRef.current = ctx
+            const analyser = ctx.createAnalyser()
+            analyser.fftSize = 256
+            ctx.createMediaStreamSource(stream).connect(analyser)
+            const data = new Uint8Array(analyser.frequencyBinCount)
+            const loop = () => {
+                analyser.getByteFrequencyData(data)
+                let sum = 0
+                for (let i = 2; i < 48; i++) sum += data[i]
+                setLevel(clamp((sum / 46 / 255) * 2.6))
+                levelRafRef.current = requestAnimationFrame(loop)
             }
+            loop()
 
             mediaRecorderRef.current.start()
-            setRecordingState('recording')
+            beginTake()
         } catch (err) {
+            releaseMicrophone()
             setMicError(
                 err && err.name === 'NotAllowedError'
-                    ? 'Microphone access was denied. Please allow microphone access in your browser and try again.'
+                    ? 'Microphone access was denied. Allow microphone access for this page in your browser, then press Record again.'
                     : `The microphone could not be used (${err && err.message ? err.message : 'unknown error'}).`
             )
         }
     }
 
-    // Animates waveform bars using audio analyser data
-    const animateWaveform = () => {
-        if (!analyserRef.current) return
-        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
-
-        const draw = () => {
-            if (!analyserRef.current) return
-            analyserRef.current.getByteFrequencyData(dataArray)
-            // Map frequency data to bar heights
-            const bars = Array.from(dataArray).slice(0, 40).map(val =>
-                Math.max(4, (val / 255) * 60)
-            )
-            setWaveformBars(bars)
-            animationRef.current = requestAnimationFrame(draw)
-        }
-        draw()
-    }
-
-    // Stops recording and offers to keep or redo the answer
     const stopRecording = () => {
         releaseMicrophone()
-        setWaveformBars(Array(40).fill(4))
+        setLevel(0.18)
         setRecordingState('done')
     }
 
-    // Throws the take away so the answer can be recorded again
+    // Demo mode only: a simulated take with sample levels, so the flow can be shown without a mic.
+    const sampleTake = () => {
+        setMicError(null)
+        audioChunksRef.current = []
+        beginTake()
+        const start = performance.now(), len = 3400
+        const loop = (now) => {
+            const t = (now - start) / len
+            if (t >= 1) { simRef.current = 0; stopRecording(); return }
+            const syll = Math.max(0, Math.sin(now / 95) * 0.5 + Math.sin(now / 37) * 0.3 + 0.35)
+            setLevel(clamp(syll * (0.4 + 0.6 * Math.sin(Math.PI * t))))
+            simRef.current = requestAnimationFrame(loop)
+        }
+        simRef.current = requestAnimationFrame(loop)
+    }
+
     const handleReRecord = () => {
         audioChunksRef.current = []
+        setSeconds(0)
+        setLevel(0)
         setRecordingState('idle')
     }
 
-    // Keeps the current answer and moves to the next question (or on to processing after the last one)
-    const handleAcceptAnswer = () => {
-        // Build audio blob from recorded chunks
+    const handleAcceptAnswer = (e) => {
+        if (isWarping()) return
+        const btn = e.currentTarget
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-
-        const newRecording = {
+        recordingsRef.current = [...recordingsRef.current, {
             questionIndex,
             question: QUESTIONS[questionIndex],
             audioBlob,
-            // Send mode to backend based on checkbox B from consent screen (both modes run the same pipeline)
-            mode: consentData.asdConsent ? 'speaker_declared' : 'universal_fairness'
-        }
-
-        const updated = [...recordings, newRecording]
-        setRecordings(updated)
-
-        // If all 5 questions done, move to processing screen
+            // Both modes run the same pipeline in this milestone
+            mode: consentData.asdConsent ? 'speaker_declared' : 'universal_fairness',
+        }]
+        setLevel(0)
         if (questionIndex === QUESTIONS.length - 1) {
-            onComplete(updated)
+            onComplete(recordingsRef.current, btn)
             return
         }
-
-        setQuestionIndex(prev => prev + 1)
-        setRecordingState('idle')
+        warp(btn, 'Question ' + ROMAN[questionIndex + 1], () => {
+            audioChunksRef.current = []
+            setQuestionIndex(q => q + 1)
+            setSeconds(0)
+            setRecordingState('idle')
+        })
     }
 
-    const isLastQuestion = questionIndex === QUESTIONS.length - 1
+    const isLast = questionIndex === QUESTIONS.length - 1
 
     return (
-        <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6 py-10">
-
-            {/* Card */}
-            <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl p-8 shadow-2xl">
-
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <span className="text-white font-bold">NeuroIntent</span>
-                        {/* research_pilot badge — always visible */}
-                        <span className="bg-indigo-700 text-indigo-100 text-xs px-2 py-0.5 rounded-full">
-                            research_pilot
-                        </span>
-                    </div>
-                    {/* Withdraw consent — returns to the consent screen */}
-                    <button
-                        onClick={onWithdraw}
-                        className="text-gray-400 text-xs hover:text-gray-200 transition-colors"
-                    >
-                        Withdraw consent
-                    </button>
+        <section className="screen rec enter" aria-label="Recording">
+            <div className="rec-top">
+                <div>
+                    <span className="q-num">{ROMAN[questionIndex]}.</span>
+                    <h1 className="q-text enter" key={questionIndex} aria-live="polite"><QuestionText text={QUESTIONS[questionIndex]} /></h1>
                 </div>
-
-                {/* Progress indicator */}
-                <div className="flex gap-1.5 mb-6">
+                <ol className="rail" aria-label="Questions">
                     {QUESTIONS.map((_, i) => (
-                        <div
-                            key={i}
-                            className={`h-1 flex-1 rounded-full transition-colors ${i < questionIndex
-                                    ? 'bg-indigo-500'
-                                    : i === questionIndex
-                                        ? 'bg-indigo-300'
-                                        : 'bg-gray-700'
-                                }`}
-                        />
+                        <li key={i} className={i < questionIndex ? 'done' : i === questionIndex ? 'now' : ''}
+                            aria-label={`Question ${i + 1}${i < questionIndex ? ', answered' : i === questionIndex ? ', current' : ''}`}>
+                            {ROMAN[i]}
+                        </li>
                     ))}
-                </div>
-
-                {/* Question counter */}
-                <p className="text-gray-500 text-xs mb-2">
-                    Question {questionIndex + 1} of {QUESTIONS.length}
-                </p>
-
-                {/* Question text */}
-                <h2 className="text-white text-lg font-semibold mb-6 leading-snug">
-                    {QUESTIONS[questionIndex]}
-                </h2>
-
-                {/* Waveform visualization — shown while recording */}
-                {recordingState === 'recording' && (
-                    <div className="flex items-end justify-center gap-0.5 h-16 mb-6">
-                        {waveformBars.map((height, i) => (
-                            <div
-                                key={i}
-                                className="w-1.5 bg-indigo-500 rounded-full transition-all duration-75"
-                                style={{ height: `${height}px` }}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                {/* Microphone problem */}
-                {micError && (
-                    <p className="text-red-400 text-xs mb-4 break-words">{micError}</p>
-                )}
-
-                {/* Record / Stop button */}
-                {recordingState === 'idle' && (
-                    <button
-                        onClick={startRecording}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-colors mb-4"
-                    >
-                        🎙 Start Recording
-                    </button>
-                )}
-
-                {recordingState === 'recording' && (
-                    <button
-                        onClick={stopRecording}
-                        className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-semibold transition-colors mb-4"
-                    >
-                        ⏹ Stop Recording
-                    </button>
-                )}
-
-                {/* Keep or redo — shown immediately after recording stops */}
-                {recordingState === 'done' && (
-                    <div className="space-y-2">
-                        <button
-                            onClick={handleAcceptAnswer}
-                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-colors"
-                        >
-                            {isLastQuestion ? 'Use this answer and finish' : 'Use this answer and continue'}
-                        </button>
-                        <button
-                            onClick={handleReRecord}
-                            className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl text-sm font-medium transition-colors"
-                        >
-                            Record this answer again
-                        </button>
-                    </div>
-                )}
-
-                {/* Privacy line */}
-                <p className="text-gray-500 text-xs text-center mt-6">
-                    Nothing is stored. Your audio is deleted right after analysis.
-                </p>
-
+                </ol>
             </div>
-        </div>
+
+            <div className="core">
+                {recordingState === 'idle' && (
+                    <button type="button" className="core-btn magnetic" ref={fxMagnetOnly} onClick={startRecording}>
+                        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3" fill="currentColor" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" /></svg>
+                        <span>Record</span>
+                    </button>
+                )}
+                {recordingState === 'recording' && (
+                    <button type="button" className="core-btn stop" onClick={stopRecording}>
+                        <span className="sq" aria-hidden="true" /><span>Stop</span>
+                    </button>
+                )}
+                {recordingState === 'done' && (
+                    <div className="core-done" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="38" height="38"><path className="tick" d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </div>
+                )}
+            </div>
+
+            <div className="rec-bottom">
+                <p className="rec-status">
+                    {recordingState === 'recording' ? <><span className="live" />Recording {fmt(seconds)}</>
+                        : recordingState === 'done' ? `Answer captured, ${fmt(seconds)}`
+                            : 'Press Record when you are ready. Take as long as you need.'}
+                </p>
+                {micError && <p className="err" role="alert">{micError}</p>}
+                {recordingState === 'done' && (
+                    <div className="rec-actions">
+                        <Btn className="btn-ember" magnetic onClick={handleAcceptAnswer}>
+                            {isLast ? 'Use this answer and finish' : 'Use this answer and continue'}
+                        </Btn>
+                        <Btn className="btn-line" onClick={handleReRecord}>Record this answer again</Btn>
+                    </div>
+                )}
+                {isDemo() && recordingState === 'idle' && (
+                    <button type="button" className="sample" onClick={sampleTake}>Use a sample answer instead</button>
+                )}
+            </div>
+        </section>
     )
 }
 
