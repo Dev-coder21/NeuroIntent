@@ -106,7 +106,7 @@ function App() {
 
             <header className="bar">
                 <a className="brand" href="#top" onClick={(e) => { if (appMode) e.preventDefault() }}>
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12h6c3 0 4-6 7-6h7" stroke="#1B1722" strokeWidth="2" strokeLinecap="round" /><path d="M8 12c3 0 4 6 7 6h7" stroke="#E4561C" strokeWidth="2" strokeLinecap="round" /></svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12h6c3 0 4-6 7-6h7" stroke="#1B1722" strokeWidth="2" strokeLinecap="round" /><path d="M8 12c3 0 4 6 7 6h7" stroke="#3E6B66" strokeWidth="2" strokeLinecap="round" /></svg>
                     NeuroIntent
                     {isDemo() && <span className="pill pill-demo" title="Demo mode: every result is sample data, not model output">demo data</span>}
                 </a>

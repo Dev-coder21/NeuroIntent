@@ -88,7 +88,7 @@ uniform mat4 uProj; uniform mat4 uView;
 uniform float uBurst; uniform float uMorph; uniform float uTime; uniform float uLevel; uniform float uPixel; uniform float uSplit;
 uniform float uAspect; uniform float uDim; uniform vec2 uShift; uniform vec2 uMouse;
 varying vec3 vColor; varying float vAlpha;
-const vec3 EMBER = vec3(0.894, 0.337, 0.110);
+const vec3 EMBER = vec3(0.310, 0.498, 0.478);   // muted teal (#4F7F7A)
 const vec3 BONE = vec3(0.106, 0.090, 0.133);
 vec3 seg(vec3 a, vec3 b, float f, float r) {
   float t = clamp(f * 1.6 - r * 0.6, 0.0, 1.0);
@@ -226,7 +226,7 @@ export function createStage(canvas) {
                 const eye = [lerp(a[0], b[0], f) + scene.mxs * 0.5, lerp(a[1], b[1], f) + scene.mys * 0.35, lerp(a[2], b[2], f)]
                 const aspect = canvas.width / canvas.height
                 const fov = aspect < 0.8 ? 1.05 : 0.78
-                gl.clearColor(0.949, 0.945, 0.961, 1); gl.clear(gl.COLOR_BUFFER_BIT)
+                gl.clearColor(0.953, 0.945, 0.925, 1); gl.clear(gl.COLOR_BUFFER_BIT)
                 gl.uniformMatrix4fv(U.uProj, false, mat4Perspective(fov, aspect, 0.1, 50))
                 const la = LOOK[k], lb = LOOK[Math.min(4, k + 1)]
                 gl.uniformMatrix4fv(U.uView, false, mat4LookAt(eye, [lerp(la[0], lb[0], f), 0, lerp(la[2], lb[2], f)], [0, 1, 0]))

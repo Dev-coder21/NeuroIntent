@@ -5,8 +5,8 @@ import { reduceMotion } from './stage'
 import { fxMagnetic } from './fx'
 import { Roll } from './Buttons'
 
-const NAME = 'NeuroIntent'.toUpperCase()
-const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&/<>=+'
+const NAME = 'NeuroIntent'
+const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
 export default function Intro({ onDone }) {
     const [gone, setGone] = useState(false)
@@ -42,7 +42,7 @@ export default function Intro({ onDone }) {
         const enter = root.querySelector('.in-enter')
         const tag = root.querySelector('.in-tag'), hint = root.querySelector('.in-hint')
         const cv = root.querySelector('.in-wave'), cx = cv.getContext('2d')
-        const ink = '#1B1722', paper = '#FFF4EC'   // the voice is ink, the plain line is cream
+        const ink = '#9CC3BC', paper = '#EEF2EF'   // the voice is soft sage, the plain line is pale
         let W = 0, H = 0, dpr = 1
         const size = () => { dpr = Math.min(2, devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr }
         size(); window.addEventListener('resize', size)
