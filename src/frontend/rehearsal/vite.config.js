@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 
 export default defineConfig({
+  base: './',
   plugins: [
     react(),
     tailwindcss(), // enables Tailwind utility classes

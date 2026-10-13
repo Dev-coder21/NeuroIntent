@@ -4,19 +4,31 @@
   "description": "**Communication-style-invariant intent interpretation for ASD speakers in automated hiring pipelines.**",
   "main": "index.js",
   "scripts": {
+    "dev": "npm --prefix src/frontend/rehearsal run dev",
+    "build": "npm --prefix src/frontend/rehearsal run build",
+    "lint": "npm --prefix src/frontend/rehearsal run lint",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/devalshah-04/Autiz-NeuroIntent.git"
+    "url": "git+https://github.com/Dev-coder21/NeuroIntent.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "neurodiversity",
+    "asd",
+    "speech-processing",
+    "interview-preparation",
+    "ai-fairness",
+    "whisper",
+    "roberta",
+    "opensmile"
+  ],
+  "author": "Dev Trivedi",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/devalshah-04/Autiz-NeuroIntent/issues"
+    "url": "https://github.com/Dev-coder21/NeuroIntent/issues"
   },
-  "homepage": "https://github.com/devalshah-04/Autiz-NeuroIntent#readme",
+  "homepage": "https://dev-coder21.github.io/NeuroIntent/",
   "dependencies": {
     "ws": "^8.20.0"
   },

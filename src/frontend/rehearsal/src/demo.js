@@ -4,9 +4,16 @@
 
 export function isDemo() {
     try {
-        if (new URLSearchParams(window.location.search).has('demo')) return true
+        const params = new URLSearchParams(window.location.search)
+        if (params.has('demo')) return true
+        if (params.has('live')) return false
     } catch {
         // no window (tests)
+    }
+    try {
+        if (typeof window !== 'undefined' && window.location.hostname.endsWith('github.io')) return true
+    } catch {
+        // no window
     }
     try {
         return import.meta.env.VITE_DEMO === '1'
