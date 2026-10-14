@@ -30,7 +30,7 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0; background: var(--ground); color: var(--bone);
   font-family: var(--body); font-size: 1rem; line-height: 1.6; font-weight: 480;
-  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  -webkit-font-smoothing: antialiased; overflow-x: clip; /* clip, not hidden: hidden makes body a scroll box and breaks position:sticky */
 }
 h1, h2, h3, p, ol, ul, dl, dd { margin: 0; padding: 0; }
 ol, ul { list-style: none; }
@@ -480,12 +480,14 @@ details > div { color: var(--mute); font-size: .8rem; display: grid; gap: .3rem;
   .sc { font-size: 1.25rem; }
 }
 /* ---------- chapter iv: the ground rules light up word by word as you scroll ---------- */
-.lit { height: 230vh; position: relative; }
-.lit-stage { position: sticky; top: 0; height: 100svh; display: flex; flex-direction: column; justify-content: center; padding: 5rem var(--gut) 3rem; max-width: 78rem; }
-.lit-text { font-family: var(--display); font-weight: 400; letter-spacing: -.01em; line-height: 1.12; font-size: clamp(1.75rem, 4.6vw, 3.9rem); max-width: 22ch; color: var(--bone); }
+/* A long track keeps the paragraph pinned while the words light up slowly; the type also scales with
+   the window height so the whole paragraph stays readable below the header on short screens. */
+.lit { height: 320vh; position: relative; }
+.lit-stage { position: sticky; top: 0; height: 100svh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; padding: 5.25rem var(--gut) 2rem; max-width: 78rem; }
+.lit-text { font-family: var(--display); font-weight: 400; letter-spacing: -.01em; line-height: 1.12; font-size: clamp(1.35rem, min(4.6vw, 7.5svh), 3.9rem); max-width: 22ch; color: var(--bone); }
 /* --lit runs 0 to 1 per word as you scroll. The word darkens and thickens to bold; the stroke adds weight
    without changing the word's width, so lines never reflow while you scroll. */
-.lit-w { --lit: clamp(0, calc(var(--p, 0) * 1.35 * var(--n) - var(--i)), 1); opacity: max(.14, var(--lit)); -webkit-text-stroke: calc(var(--lit) * .028em) currentColor; transition: opacity .15s linear, -webkit-text-stroke-width .15s linear; }
+.lit-w { --lit: clamp(0, calc(var(--p, 0) * 1.18 * var(--n) - var(--i)), 1); opacity: max(.14, var(--lit)); -webkit-text-stroke: calc(var(--lit) * .028em) currentColor; transition: opacity .15s linear, -webkit-text-stroke-width .15s linear; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
