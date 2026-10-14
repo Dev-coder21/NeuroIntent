@@ -499,3 +499,7 @@ details > div { color: var(--mute); font-size: .8rem; display: grid; gap: .3rem;
 .proc-attn { display: grid; gap: .9rem; margin-top: 1.4rem; }
 .proc-attn .sub { margin-top: 0; }
 .proc-attn .rec-actions { justify-content: flex-start; }
+
+/* Keyboard hint is meaningless on touch-only devices */
+@media (hover: none) and (pointer: coarse) { .in-hint { display: none; } }
+html { overflow-x: clip; }
