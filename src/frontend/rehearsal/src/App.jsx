@@ -13,6 +13,8 @@ import ProcessingScreen from './ProcessingScreen'
 import ReportScreen from './ReportScreen'
 
 function App() {
+    // the intro gate plays once per browser session, not on every reload
+    const [introSeen] = useState(() => { try { return sessionStorage.getItem('ni-intro') === '1' } catch { return false } })
     const [screen, setScreen] = useState('home') // 'home' | 'rec' | 'proc' | 'report'
     const [status, setStatus] = useState('')
     const [consentData, setConsentData] = useState(null)
@@ -94,13 +96,14 @@ function App() {
     const withdraw = (e) => warp(e && e.currentTarget, 'All cleared', withdrawNow)
 
     const introDone = () => {
+        try { sessionStorage.setItem('ni-intro', '1') } catch { /* storage unavailable */ }
         const cta = document.querySelector('.hero .btn-ember')
         if (cta) cta.focus({ preventScroll: true })
     }
 
     return (
         <>
-            <Intro onDone={introDone} />
+            {!introSeen && <Intro onDone={introDone} />}
             <canvas id="gl" ref={attachStage} aria-hidden="true" />
             <div className="vignette" aria-hidden="true" />
 
